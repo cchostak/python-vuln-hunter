@@ -1,0 +1,9 @@
+torch
+fasttext
+numpy
+scikit-learn
+fastapi
+uvicorn
+pytest
+tree_sitter
+datasets
