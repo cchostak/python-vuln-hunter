@@ -10,6 +10,7 @@ predictor = Predictor()
 class ScanRequest(BaseModel):
     code: str
     threshold: float | None = None
+    explain: bool = False
 
 
 @app.post("/scan")
@@ -18,4 +19,7 @@ def scan(req: ScanRequest):
         raise HTTPException(status_code=400, detail="code is required")
     threshold = req.threshold if req.threshold is not None else 0.5
     result = predictor.predict(req.code, threshold=threshold)
+    if not req.explain:
+        # strip explanation if not requested
+        result.pop("explanation", None)
     return result

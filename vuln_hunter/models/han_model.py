@@ -43,13 +43,15 @@ class HANStream(nn.Module):
 
 class HANModel(nn.Module):
     def __init__(self, src_vocab_size: int, bc_vocab_size: int, embedding_dim: int = 50, hidden_size: int = 32,
-                 src_embedding_matrix=None, bc_embedding_matrix=None):
+                 src_embedding_matrix=None, bc_embedding_matrix=None, dropout: float = 0.2):
         super().__init__()
         self.src_stream = HANStream(src_vocab_size, embedding_dim, hidden_size, src_embedding_matrix)
         self.bc_stream = HANStream(bc_vocab_size, embedding_dim, hidden_size, bc_embedding_matrix)
         self.classifier = nn.Sequential(
+            nn.Dropout(dropout),
             nn.Linear(hidden_size * 4, hidden_size),
             nn.ReLU(),
+            nn.Dropout(dropout),
             nn.Linear(hidden_size, 1),
         )
 

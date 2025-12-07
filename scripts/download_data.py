@@ -8,7 +8,7 @@ except ImportError as exc:
     raise SystemExit("datasets package not installed; run `pip install -r requirements.txt`") from exc
 
 
-def download(target: Path, dataset: str = "maddyrucos/code_vulnerability_python"):
+def download(target: Path, dataset: str = "sunlab/PySecDB"):
     ds = load_dataset(dataset)
     target.mkdir(parents=True, exist_ok=True)
     # Dataset may expose different split names; iterate over available ones.

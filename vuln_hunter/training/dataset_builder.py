@@ -63,9 +63,11 @@ def load_codexglue_jsonl(data_dir: str, segment_len: int, splits: Sequence[str])
     """Load CodeXGLUE defect-detection jsonl files if present."""
     jsonl_files = []
     for split in splits:
-        patterns = [f"{split}.jsonl", f"{split.capitalize()}.jsonl", f"*{split}*.jsonl"]
+        patterns = [f"{split}.jsonl", f"{split.capitalize()}.jsonl"]
         for pattern in patterns:
             jsonl_files.extend(glob.glob(os.path.join(data_dir, pattern)))
+    # deduplicate
+    jsonl_files = list(dict.fromkeys(jsonl_files))
     examples = []
     for path in jsonl_files:
         with open(path, "r", encoding="utf-8", errors="ignore") as f:
@@ -75,7 +77,10 @@ def load_codexglue_jsonl(data_dir: str, segment_len: int, splits: Sequence[str])
                     continue
                 sample = json.loads(line)
                 code = sample.get("func") or sample.get("code") or ""
-                label = int(sample.get("target", 0))
+                label_val = sample.get("label")
+                if label_val is None:
+                    label_val = sample.get("target", 0)
+                label = int(label_val)
                 src_tokens = tokenize_source(code)
                 bc_tokens = extract_bytecode_ops(code)
                 src_segments, bc_segments = build_parallel_segments(src_tokens, bc_tokens, segment_len)
@@ -93,22 +98,30 @@ def class_counts_from_examples(examples) -> Dict[str, int]:
     return counts
 
 
-def load_hf_codexglue(splits: Sequence[str], segment_len: int, dataset_name: str = "maddyrucos/code_vulnerability_python"):
-    """Load Python vulnerability dataset from Hugging Face."""
+def load_hf_pysec(splits: Sequence[str], segment_len: int, dataset_name: str = "sunlab/PySecDB"):
+    """Load Python vulnerability dataset from Hugging Face (PySecDB)."""
     try:
         from datasets import load_dataset
     except ImportError:
         return []
+    try:
+        hf_ds = load_dataset(dataset_name)
+    except Exception:
+        return []
     split_map = {"valid": "validation", "validation": "validation", "train": "train", "test": "test"}
     examples = []
-    hf_ds = load_dataset(dataset_name)
     for split in splits:
         hf_split = split_map.get(split, split)
         if hf_split not in hf_ds:
             continue
         for sample in hf_ds[hf_split]:
-            code = sample.get("code") or sample.get("func") or ""
-            label = int(sample.get("target", sample.get("label", 0)))
+            code = sample.get("code") or sample.get("func") or sample.get("content") or sample.get("text") or ""
+            label_val = None
+            for key in ("label", "target", "vulnerability", "vul", "is_vulnerable"):
+                if key in sample:
+                    label_val = sample[key]
+                    break
+            label = int(label_val) if label_val is not None else 0
             src_tokens = tokenize_source(code)
             bc_tokens = extract_bytecode_ops(code)
             src_segments, bc_segments = build_parallel_segments(src_tokens, bc_tokens, segment_len)
@@ -169,25 +182,25 @@ def default_dataset(
     src_vocab_override: Optional[dict] = None,
     bc_vocab_override: Optional[dict] = None,
 ):
-    # Prefer Hugging Face CodeXGLUE; fallback to local jsonl/txt; lastly .py files.
+    # Prefer local datasets specified in data_dir; fallback to Kaggle/HF; lastly .py files.
     splits = splits or ("train",)
     examples: List[Dict] = []
 
-    # Primary: Kaggle CSV if present
-    examples = load_kaggle_csv(data_dir, segment_len)
+    # First: local jsonl in data_dir
+    examples = load_codexglue_jsonl(data_dir, segment_len, splits)
 
-    # Next: Hugging Face hosted dataset (requires network/cache)
-    if not examples:
-        examples = load_hf_codexglue(splits, segment_len)
-
-    # Fallback: local jsonl
-    if not examples:
-        examples = load_codexglue_jsonl(data_dir, segment_len, splits)
-
-    # Fallback: local txt (legacy CodeXGLUE format)
+    # Next: local txt (legacy CodeXGLUE format)
     if not examples:
         for split in splits:
             examples.extend(load_txt_split(data_dir, split, segment_len))
+
+    # Next: Kaggle CSV if present
+    if not examples:
+        examples = load_kaggle_csv(data_dir, segment_len)
+
+    # Optional: Hugging Face PySecDB only if explicitly requested via env
+    if not examples and os.environ.get("VULN_HUNTER_USE_PYSEC"):
+        examples = load_hf_pysec(splits, segment_len)
 
     # Fallback: any python files in data_dir
     if not examples:

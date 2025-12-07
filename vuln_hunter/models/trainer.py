@@ -62,9 +62,9 @@ def save_checkpoint(model: HANModel, src_vocab: dict, bc_vocab: dict, src_emb_ma
     torch.save(payload, path)
 
 
-def initialize_model(src_vocab: dict, bc_vocab: dict, embedding_dim: int = 50, hidden_size: int = 32):
+def initialize_model(src_vocab: dict, bc_vocab: dict, embedding_dim: int = 50, hidden_size: int = 32, dropout: float = 0.2):
     src_emb = build_embedding_matrix(src_vocab, MODEL_CHECKPOINT.replace("han_model.pt", "fasttext_source.bin"), dim=embedding_dim)
     bc_emb = build_embedding_matrix(bc_vocab, MODEL_CHECKPOINT.replace("han_model.pt", "fasttext_bytecode.bin"), dim=embedding_dim)
     model = HANModel(len(src_vocab), len(bc_vocab), embedding_dim=embedding_dim, hidden_size=hidden_size,
-                     src_embedding_matrix=src_emb, bc_embedding_matrix=bc_emb)
+                     src_embedding_matrix=src_emb, bc_embedding_matrix=bc_emb, dropout=dropout)
     return model, src_emb, bc_emb

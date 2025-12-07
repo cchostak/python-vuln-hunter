@@ -19,6 +19,9 @@ def main():
     )
     parser.add_argument("--pos-weight", type=float, default=None, help="Positive class weight for imbalanced data")
     parser.add_argument("--max-segments", type=int, default=8, help="Number of code segments to pad/truncate to")
+    parser.add_argument("--embedding-dim", type=int, default=50, help="Embedding dimension")
+    parser.add_argument("--hidden-size", type=int, default=32, help="GRU hidden size")
+    parser.add_argument("--dropout", type=float, default=0.2, help="Dropout for classifier head")
     args = parser.parse_args()
 
     splits = [s.strip() for s in args.splits.split(",") if s.strip()]
@@ -29,7 +32,7 @@ def main():
         neg = max(1, stats.get("neg", 0))
         pos_weight = neg / pos
     print(f"Class balance: pos={stats.get('pos',0)} neg={stats.get('neg',0)} pos_weight={pos_weight:.2f}")
-    model, src_emb, bc_emb = initialize_model(src_vocab, bc_vocab)
+    model, src_emb, bc_emb = initialize_model(src_vocab, bc_vocab, embedding_dim=args.embedding_dim, hidden_size=args.hidden_size, dropout=args.dropout)
     device = "cuda" if torch.cuda.is_available() else "cpu"
     train(model, dataset, epochs=args.epochs, batch_size=args.batch_size, lr=args.lr, device=device, pos_weight=pos_weight)
     save_checkpoint(model, src_vocab, bc_vocab, src_emb, bc_emb, MODEL_CHECKPOINT)
